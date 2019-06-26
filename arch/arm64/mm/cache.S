@@ -158,18 +158,42 @@ ENTRY(__inval_dcache_area)
  *	- size    - size in question
  */
 __dma_inv_area:
+	/*
+	 * x1과 x0의 값을 더해서 x1에 저장
+	 * x0 -> boot_args의 주소 x1 -> 0x20 == 32
+	 * x1 에는 boot_args+32의 값이 저장됨
+	 */
 	add	x1, x1, x0
+	/*
+	 * dcache_line_size == 매크로 ../kernel/assembler.h:322
+	 * 캐시 라인 워드 사이즈를 읽어온 후 4를 곱하여 reg 레지스터(x2)로 리턴한다.
+	 */
 	dcache_line_size x2, x3
+	//x3 = x2(캐시 라인 워드 사이즈) * 4 - 1
 	sub	x3, x2, #1
+	//x1과 x3 레지스터를 ANDS연산을 하고 SPSR레지스터의 값을 세팅
 	tst	x1, x3				// end cache line aligned?
+	//x3에 세팅된 비트에 대해서 x1의 값을 0으로 세팅하여 x1레지스터에 저장함
 	bic	x1, x1, x3
+	//zero 플래그가 1이면 label(1)로 분기함
 	b.eq	1f
+	//data cache를 사용하기 전에 clean하고 무효화 시킴 -> (flush 동작)
 	dc	civac, x1			// clean & invalidate D / U line
+
+	//x3와 x0를 ANDS 연산을 하여 SPSR 레지스터의 값을 세팅
+
+	/*
+	 * x0 x1의 start cache line이 정렬이 안되있으면 clean & invalidate
+	 */
 1:	tst	x0, x3				// start cache line aligned?
 	bic	x0, x0, x3
 	b.eq	2f
 	dc	civac, x0			// clean & invalidate D / U line
 	b	3f
+
+	/*
+	 * x0 x1의 start cache line이 정렬이 되있으면 invalidate
+	 */
 2:	dc	ivac, x0			// invalidate D / U line
 3:	add	x0, x0, x2
 	cmp	x0, x1

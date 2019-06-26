@@ -115,7 +115,7 @@ pe_header:
 	 *  x19/x20    __primary_switch()         callee preserved temp registers
 	 */
 ENTRY(stext)
-	bl	preserve_boot_args
+	bl	preserve_boot_args  //부트로더에 의해 전달된 부트 파라미터를 저장한다.
 	bl	el2_setup			// Drop to EL1, w0=cpu_boot_mode
 	adrp	x23, __PHYS_OFFSET
 	and	x23, x23, MIN_KIMG_ALIGN - 1	// KASLR offset, defaults to 0
@@ -135,16 +135,48 @@ ENDPROC(stext)
  * Preserve the arguments passed by the bootloader in x0 .. x3
  */
 preserve_boot_args:
+	/*
+	 * x0의 레지스터에 들어있는 값을 x21레지스터로 복사
+	 * x0안의 값은 FDT이다. FDT = 하드웨어 정보에 대한 바이너리
+	 * x0레지스터는 C언어에서 파라미터와 리턴값을 저장하는 용도로 사용되므로 값이 덮어 씌워 질 수 있음.
+	 */
 	mov	x21, x0				// x21=FDT
 
+	/*
+	 * boot_args 라벨의 주소를 x0 레지스터에 복사
+	 * adr_l은 매크로이다. (../include/assembler.h:219번째 라인)
+	 */
 	adr_l	x0, boot_args			// record the contents of
+	/*
+	 * ARM에서는 []는 간접 주소 지정방식
+	 * x21의 값과 x1의 값을 x0가 가리키는 주소에 저장
+	 */
 	stp	x21, x1, [x0]			// x0 .. x3 at kernel entry
+	/*
+	 * x2의 값과 x3의 값을 x0+16번지에 저장)
+	 */
 	stp	x2, x3, [x0, #16]
 
+	//x21(위 코드에서 x0의 값을 복사해온 값)과 x1~x3의 값은 bootloder에서 하드웨어와 관련된 특정한 값을 전달하는데
+	//이를 boot_args에 백업시키는 목적이다. (x0부터 x3까지는 함수 호출 시 값이 바뀔 수 있기때문임)
+
+	/*
+	 * dmb는 위에서 사용된 메모리를 dmb 명령 아래에서 먼저 접근하지 못하게 막음.
+	 * sy는 옵션 -> 모든 시스템에 적용시키는 옵션.
+	 * __inval_cache_range 함수 내의 데이터 캐시 클린 명령어가 저장 명령어보다 먼저 실행되는 것을 막기 위함
+	 */
 	dmb	sy				// needed before dc ivac with
 						// MMU off
-
+	/*
+	 * 20 값을 x1레지스터에 복사
+	 * 
+	 */
 	mov	x1, #0x20			// 4 x 8 bytes
+
+		/*
+	 * __inval_dcache_area 서브루틴으로 JUMP (../mm/cache.S : 152라인)
+	 * 
+	 */
 	b	__inval_dcache_area		// tail call
 ENDPROC(preserve_boot_args)
 

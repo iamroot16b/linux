@@ -298,10 +298,24 @@ alternative_endif
  * provide the system wide safe value from arm64_ftr_reg_ctrel0.sys_val
  */
 	.macro	read_ctr, reg
+	
+	/*
+	 * alternative_if_not (./alternative.h:140번째 라인)
+	 *  -----
+	 */
 alternative_if_not ARM64_MISMATCHED_CACHE_TYPE
+
+	/*
+	 * ctr_el0 -> 캐시 타입을 알아오는(?) 레지스터
+	 * mrs는 시스템 레지스터의 값을 레지스터에 저장함
+	 * 캐시 타입을 알아내서 \reg(x2)에 저장함.
+	 */
 	mrs	\reg, ctr_el0			// read CTR
 	nop
 alternative_else
+	/*
+	 * ldr_l == 매크로 (./assembler.h:231번째 라인)
+	 */
 	ldr_l	\reg, arm64_ftr_reg_ctrel0 + ARM64_FTR_SYSVAL
 alternative_endif
 	.endm
@@ -322,6 +336,9 @@ alternative_endif
  * dcache_line_size - get the safe D-cache line size across all CPUs
  */
 	.macro	dcache_line_size, reg, tmp
+	/*
+	 * read_ctr == 매크로 (./assembler.h:279번째 라인)
+	 */
 	read_ctr	\tmp
 	ubfm		\tmp, \tmp, #16, #19	// cache line size encoding
 	mov		\reg, #4		// bytes per word
