@@ -117,9 +117,22 @@ pe_header:
 ENTRY(stext)
 	bl	preserve_boot_args  //부트로더에 의해 전달된 부트 파라미터를 저장한다.
 	bl	el2_setup			// Drop to EL1, w0=cpu_boot_mode
+
+	// adrp-Operation
+	// Compute address of 4KB page at a PC-relative offset
+	//
+	// bits(64) base = PC[];
+	// base<11:0> = Zeros(12);
+	// X[d] = base + imm;
+	//
+	// KERNEL_START == KIMAGE_VADDR + TEXT_OFFSET
+	// __PHYS_OFFSET == KIMAGE_VADDR
+	// x23 = PC(4KB set 0) +  (KERNEL_START - TEXT_OFFSET)
 	adrp	x23, __PHYS_OFFSET
+	// 하위 2Mb 만 x23 에 저장.
 	and	x23, x23, MIN_KIMG_ALIGN - 1	// KASLR offset, defaults to 0
 	bl	set_cpu_boot_mode_flag
+	// 2019.07.06 7주차 시작점
 	bl	__create_page_tables
 	/*
 	 * The following calls CPU setup code, see arch/arm64/mm/proc.S for
@@ -169,13 +182,13 @@ preserve_boot_args:
 						// MMU off
 	/*
 	 * 20 값을 x1레지스터에 복사
-	 * 
+	 *
 	 */
 	mov	x1, #0x20			// 4 x 8 bytes
 
 		/*
 	 * __inval_dcache_area 서브루틴으로 JUMP (../mm/cache.S : 152라인)
-	 * 
+	 *
 	 */
 	b	__inval_dcache_area		// tail call
 ENDPROC(preserve_boot_args)
@@ -517,36 +530,67 @@ EXPORT_SYMBOL(kimage_vaddr)
  * booted in EL1 or EL2 respectively.
  */
 ENTRY(el2_setup)
+	// SPsel - Stack point select
+	// 0번째 비트를 1로 설정
+	// 1로 설정하면 Exception level 따른 SP_ELn 을 사용
 	msr	SPsel, #1			// We want to use SP_EL{1,2}
-	mrs	x0, CurrentEL
-	cmp	x0, #CurrentEL_EL2
+	mrs	x0, CurrentEL // 현재 익셉션 레벨을 x0 에 저장
+	cmp	x0, #CurrentEL_EL2 // if (CurrentEL == EL2) goto 1f;
 	b.eq	1f
+
+	/***** if (CurrentEL != EL2) ******/
+	// mov_q - 상수값을 reg 에 넣기 위한 매크로
+	/**
+	 * See arch/arm64/include/asm/sysreg.h
+	 *
+	 * #define SCTLR_EL1_E0E		(_BITUL(24))
+	 * #define SCTLR_ELx_EE    (_BITUL(25))
+	 * #ifdef CONFIG_CPU_BIG_ENDIAN
+	 * #define ENDIAN_SET_EL1		(SCTLR_EL1_E0E | SCTLR_ELx_EE)
+	 * #else
+	 * #define ENDIAN_SET_EL1		0
+	 * #endif
+	 */
 	mov_q	x0, (SCTLR_EL1_RES1 | ENDIAN_SET_EL1)
+	// sctlr_el1 reg에 Endian 설정
 	msr	sctlr_el1, x0
+	// w0 에 EL1 으로 부팅했음을 저장
 	mov	w0, #BOOT_CPU_MODE_EL1		// This cpu booted in EL1
-	isb
+	isb // Instruction Synchronization Barrier
 	ret
 
+	/******* if (CurrentEL == EL2) ********/
+
+	// sctlr_el2 reg에 Endian 설정
 1:	mov_q	x0, (SCTLR_EL2_RES1 | ENDIAN_SET_EL2)
 	msr	sctlr_el2, x0
 
 #ifdef CONFIG_ARM64_VHE
 	/*
+	 * VHE == Virtualization Host Extensions
+	 *
 	 * Check for VHE being present. For the rest of the EL2 setup,
 	 * x2 being non-zero indicates that we do have VHE, and that the
-	 * kernel is intended to run at EL2.
+	   kernel is intended to run at EL2.
 	 */
+	// VHE 지원 여부 확인
+	// ID_AA64MMFR1_EL1
+	// VH,[11:8] : Indicates whether Virtualization Host Extensions are supported.
 	mrs	x2, id_aa64mmfr1_el1
 	ubfx	x2, x2, #8, #4
 #else
+	// VHE를 설정하지 않을 경우
+	// x2 = Zero register
 	mov	x2, xzr
 #endif
 
 	/* Hyp configuration. */
+	// #define HCR_HOST_NVHE_FLAGS (HCR_RW | HCR_API | HCR_APK)
 	mov_q	x0, HCR_HOST_NVHE_FLAGS
 	cbz	x2, set_hcr
 	mov_q	x0, HCR_HOST_VHE_FLAGS
 set_hcr:
+	// x0 == HCR_HOST_NVHE_FLAGS or HCR_HOST_VHE_FLAGS
 	msr	hcr_el2, x0
 	isb
 
@@ -684,13 +728,18 @@ ENDPROC(el2_setup)
  * in w0. See arch/arm64/include/asm/virt.h for more info.
  */
 set_cpu_boot_mode_flag:
-	adr_l	x1, __boot_cpu_mode
+	adr_l	x1, __boot_cpu_mode // x1 = &__boot_cpu_mode
 	cmp	w0, #BOOT_CPU_MODE_EL2
 	b.ne	1f
-	add	x1, x1, #4
-1:	str	w0, [x1]			// This CPU has booted in EL1
+	// if (w0 == #BOOT_CPU_MODE_EL2)
+	// {
+	add	x1, x1, #4 // #BOOT_CPU_MODE_EL1 = x1 + #4
+	// }
+1:	str	w0, [x1]		// *x1 = w0, This CPU has booted in EL1
+						// if (w0 == #BOOT_CPU_MODE_EL2) 
+						//	BOOT_CPU_MODE_EL1 = BOOT_CPU_MODE_EL2
 	dmb	sy
-	dc	ivac, x1			// Invalidate potentially stale cache line
+	dc	ivac, x1		// Invalidate potentially stale cache line
 	ret
 ENDPROC(set_cpu_boot_mode_flag)
 

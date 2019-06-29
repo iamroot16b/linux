@@ -171,8 +171,12 @@ __dma_inv_area:
 	dcache_line_size x2, x3
 	//x3 = x2(캐시 라인 워드 사이즈) * 4 - 1
 	sub	x3, x2, #1
-	//x1과 x3 레지스터를 ANDS연산을 하고 SPSR레지스터의 값을 세팅
-	tst	x1, x3				// end cache line aligned?
+	//x1과 x3 레지스터를 ANDS연산을 하고 CPSR레지스터의 값을 세팅
+	tst	x1, x3			// end cache line aligned?
+
+	// operand2 = NOT(operand2);
+	// result = operand1 AND operand2;
+	// X[d] = result;
 	//x3에 세팅된 비트에 대해서 x1의 값을 0으로 세팅하여 x1레지스터에 저장함
 	bic	x1, x1, x3
 	//zero 플래그가 1이면 label(1)로 분기함
@@ -192,13 +196,14 @@ __dma_inv_area:
 	b	3f
 
 	/*
-	 * x0 x1의 start cache line이 정렬이 되있으면 invalidate
+	 * x0 x1의 cache line invalidate
 	 */
 2:	dc	ivac, x0			// invalidate D / U line
-3:	add	x0, x0, x2
-	cmp	x0, x1
-	b.lo	2b
-	dsb	sy
+3:	add	x0, x0, x2 // x0 = x0 + x2(cache size)
+	cmp	x0, x1 // x0 - x1의 결과 CPSR 을 설정
+    b.lo	2b // b.lo (less than)
+               // if (x0 < x1) goto 2b;
+	dsb	sy // Data Synchronization Barrier
 	ret
 ENDPIPROC(__inval_dcache_area)
 ENDPROC(__dma_inv_area)

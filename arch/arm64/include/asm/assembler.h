@@ -529,6 +529,8 @@ USER(\label, ic	ivau, \tmp2)			// invalidate I line PoU
 	 * mov_q - move an immediate constant into a 64-bit register using
 	 *         between 2 and 4 movz/movk instructions (depending on the
 	 *         magnitude and sign of the operand)
+	 *
+	 *         상수값을 reg 에 넣기 위한 매크로.
 	 */
 	.macro	mov_q, reg, val
 	.if (((\val) >> 31) == 0 || ((\val) >> 31) == 0x1ffffffff)
