@@ -141,6 +141,7 @@ ENTRY(stext)
 	 * the TCR will have been set.
 	 */
 	bl	__cpu_setup			// initialise processor
+	// 2019.7.13 8주차 시작점
 	b	__primary_switch
 ENDPROC(stext)
 
@@ -330,7 +331,7 @@ ENDPROC(preserve_boot_args)
  *     been enabled
  */
 __create_page_tables:
-	mov	x28, lr
+	mov	x28, lr // x28 := lr
 
 	/*
 	 * Invalidate the init page tables to avoid potential dirty cache lines
@@ -338,44 +339,71 @@ __create_page_tables:
 	 * the kernel image, and thus are clean to the PoC per the boot
 	 * protocol.
 	 */
-	adrp	x0, init_pg_dir
-	adrp	x1, init_pg_end
-	sub	x1, x1, x0
+	adrp	x0, init_pg_dir // x0 := &init_pg_dir
+	adrp	x1, init_pg_end // x1 := &init_pg_end
+	sub	x1, x1, x0 // x1 := x1 - x0, x1 == &init_pg_end - &init_pg_dir
+	/*
+	 * [x0](&init_pg_dir)부터 [x0 + x1](&init_pg_end)까지의 cache 내용을 invalidate함.
+	 */
 	bl	__inval_dcache_area
 
 	/*
 	 * Clear the init page tables.
 	 */
+	/*
+	 * __inval_dcache_area에서 x0, x1의 값이 변경되므로 다시 adrp로 값을 가져옴
+	 */
 	adrp	x0, init_pg_dir
 	adrp	x1, init_pg_end
 	sub	x1, x1, x0
-1:	stp	xzr, xzr, [x0], #16
+	/*
+	 * init_pg 영역을 0으로 초기화 함
+	 */
+1:	stp	xzr, xzr, [x0], #16 // 16-byte 만큼 [x0](&x0)에 0을 씀, 이후 x0를 16만큼 증가.
 	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
-	stp	xzr, xzr, [x0], #16
-	subs	x1, x1, #64
+	stp	xzr, xzr, [x0], #16 // 총 64bytes만큼 0을 씀
+	subs	x1, x1, #64 // x1 (남은 size)를 64byte만큼 감소
+	
+	/* 
+	 * x1이 0이 되기 전까지 1로 branch, x1이 0이 되면 branch를 하지 않음
+	 */
 	b.ne	1b
 
+	/*
+	 * ../include/asm/kernel-pgtable.h:129
+	 * 미리 정의된 MMU플래그 세트
+	 */
 	mov	x7, SWAPPER_MM_MMUFLAGS
 
 	/*
 	 * Create the identity mapping.
 	 */
-	adrp	x0, idmap_pg_dir
-	adrp	x3, __idmap_text_start		// __pa(__idmap_text_start)
+	adrp	x0, idmap_pg_dir // idmap 페이지 테이블 주소
+	adrp	x3, __idmap_text_start		// __pa(__idmap_text_start), idmap 텍스트의 시작 주소
 
 #ifdef CONFIG_ARM64_USER_VA_BITS_52
 	mrs_s	x6, SYS_ID_AA64MMFR2_EL1
+	/*
+	 * VARange, bits [19:16]
+	 * 0b0000 48-bit
+	 * 0b0001 VMSAv8-64 supports 52-bit VAs when using the 64KB translation granule. The other translation granules support 48-bit VAs.
+	 */
 	and	x6, x6, #(0xf << ID_AA64MMFR2_LVA_SHIFT)
 	mov	x5, #52
-	cbnz	x6, 1f
+	cbnz	x6, 1f // cbnz: Compare and Branch on Nonzero.
 #endif
 	mov	x5, #VA_BITS
 1:
-	adr_l	x6, vabits_user
-	str	x5, [x6]
-	dmb	sy
-	dc	ivac, x6		// Invalidate potentially stale cache line
+	adr_l	x6, vabits_user // x6 := vabits_user 
+	str	x5, [x6] // *vabits_user = VA_BITS
+	/*
+	 * dmb는 위에서 사용된 메모리를 dmb 명령 아래에서 먼저 접근하지 못하게 막음.
+	 * sy는 옵션 -> 모든 시스템에 적용시키는 옵션.
+	 * __inval_cache_range 함수 내의 데이터 캐시 클린 명령어가 저장 명령어보다 먼저 실행되는 것을 막기 위함
+	 */
+	dmb	sy // 메모리
+	dc	ivac, x6 // Invalidate potentially stale cache line
 
 	/*
 	 * VA_BITS may be too small to allow for an ID mapping to be created
@@ -390,12 +418,18 @@ __create_page_tables:
 	 * the physical address of __idmap_text_end.
 	 */
 	adrp	x5, __idmap_text_end
-	clz	x5, x5
+	clz	x5, x5 // CLZ 명령어는 Rm의 값에서 앞에 오는 0의 수를 계산하여 결과를 Rd에 반환합니다.
+	/*
+	 * TCR_T0SZ(x) ((UL(64) - (x)) << TCR_T0SZ_OFFSET) 
+	 * TCR_T0SZ_OFFSET 0
+	 * x5의 값이 MSB로부터 세었을 때 0의 개수가 많다면 크기가 작다는 의미이므로
+	 * (64 - VA_BITS)보다 작으면 VA의 range가 충분하다는 뜻
+	 */
 	cmp	x5, TCR_T0SZ(VA_BITS)	// default T0SZ small enough?
 	b.ge	1f			// .. then skip VA range extension
 
 	adr_l	x6, idmap_t0sz
-	str	x5, [x6]
+	str	x5, [x6] // *idmat_t0sz = x5
 	dmb	sy
 	dc	ivac, x6		// Invalidate potentially stale cache line
 
@@ -415,27 +449,59 @@ __create_page_tables:
 #endif
 
 	mov	x4, EXTRA_PTRS
+	/*
+	 * create_table_entry, tbl, virt, shift, ptrs, tmp1, tmp2
+	 *
+ 	 * Macro to create a table entry to the next page.
+ 	 *
+  	 *	tbl:	page table address
+ 	 *	virt:	virtual address
+ 	 *	shift:	#imm page table shift
+  	 *	ptrs:	#imm pointers per table page
+ 	 *
+ 	 * Preserves:	virt
+	 * Corrupts:	ptrs, tmp1, tmp2
+	 * Returns:	tbl -> next level table page address
+	 */
+	 /*
+	  * 책 p.71
+	  * x3: __idmap_text_start
+	  * x0: idmap_pg_dir
+	  */
 	create_table_entry x0, x3, EXTRA_SHIFT, x4, x5, x6
-#else
+#else // VA_BITS >= 48
 	/*
 	 * If VA_BITS == 48, we don't have to configure an additional
 	 * translation level, but the top-level table has more entries.
 	 */
 	mov	x4, #1 << (PHYS_MASK_SHIFT - PGDIR_SHIFT)
-	str_l	x4, idmap_ptrs_per_pgd, x5
+	str_l	x4, idmap_ptrs_per_pgd, x5 // *idmap_ptrs_per_pgd = x4
 #endif
 1:
-	ldr_l	x4, idmap_ptrs_per_pgd
+	ldr_l	x4, idmap_ptrs_per_pgd // default: (1 << (MAX_USER_VA_BITS - PGDIR_SHIFT))    
 	mov	x5, x3				// __pa(__idmap_text_start)
 	adr_l	x6, __idmap_text_end		// __pa(__idmap_text_end)
 
+	/*
+	 * Map memory for specified virtual address range
+	 * map_memory, tbl, rtbl, vstart, vend, flags, phys, pgds, istart, iend, tmp, count,        sv
+	 */
+	/*
+	 * map_memory 매크로에 들어가는 레지스터의 값
+	 * x0: idmap_pg_dir
+	 * x1: idmap_pg_end - idmap_pg_dir
+	 * x6: __pa(__idmap_text_end)
+	 * x7: #SWAPPER_MM_MMUFLAGS
+	 * x3: __pa(__id_map_text_start)
+	 * x4: idmap_ptrs_per_pgd
+	 */
 	map_memory x0, x1, x3, x6, x7, x3, x4, x10, x11, x12, x13, x14
 
 	/*
 	 * Map the kernel image (starting with PHYS_OFFSET).
 	 */
 	adrp	x0, init_pg_dir
-	mov_q	x5, KIMAGE_VADDR + TEXT_OFFSET	// compile time __va(_text)
+	mov_q	x5, KIMAGE_VADDR + TEXT_OFFSET	// compile time __va(_text), x5 := KIMAGE_VADDR + TEXT_OFFSET
 	add	x5, x5, x23			// add KASLR displacement
 	mov	x4, PTRS_PER_PGD
 	adrp	x6, _end			// runtime __pa(_end)
@@ -450,6 +516,7 @@ __create_page_tables:
 	 * accesses (MMU disabled), invalidate the idmap and swapper page
 	 * tables again to remove any speculatively loaded cache lines.
 	 */
+	/* idmap_pg_dir과 init_pg_end에 해당하는 데이터 캐시를 무효화.
 	adrp	x0, idmap_pg_dir
 	adrp	x1, init_pg_end
 	sub	x1, x1, x0
