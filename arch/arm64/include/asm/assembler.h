@@ -370,6 +370,11 @@ alternative_endif
  * tcr_set_t0sz - update TCR.T0SZ so that we can load the ID map
  */
 	.macro	tcr_set_t0sz, valreg, t0sz
+	/*
+	 * BFI: Bitfield Insert.
+	 * TCR_T0SZ_OFFSET 0
+	 * TCR_TxSZ_WIDTH 6
+	 */
 	bfi	\valreg, \t0sz, #TCR_T0SZ_OFFSET, #TCR_TxSZ_WIDTH
 	.endm
 
@@ -460,7 +465,14 @@ USER(\label, ic	ivau, \tmp2)			// invalidate I line PoU
  */
 	.macro	reset_pmuserenr_el0, tmpreg
 	mrs	\tmpreg, id_aa64dfr0_el1	// Check ID_AA64DFR0_EL1 PMUVer
+	/*
+	 * sbfx: Signed Bitfield Extract.
+	 * tmpreg := tmpreg[11:8], PMUVer, Performance Monitors Extension version.
+	 * 0b0000 PMU가 없음
+	 * 나머지는 PMU존재
+	 */
 	sbfx	\tmpreg, \tmpreg, #8, #4
+	// PMU가 존재하지 않으면 9000으로 분기
 	cmp	\tmpreg, #1			// Skip if no PMU present
 	b.lt	9000f
 	msr	pmuserenr_el0, xzr		// Disable PMU access from EL0

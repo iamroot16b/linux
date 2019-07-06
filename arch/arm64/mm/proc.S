@@ -406,14 +406,35 @@ ENDPROC(idmap_kpti_install_ng_mappings)
 	.pushsection ".idmap.text", "awx"
 ENTRY(__cpu_setup)
 	tlbi	vmalle1				// Invalidate local TLB
-	dsb	nsh
+	dsb	nsh // nonsharable 영역의 읽기 쓰기 명령어가 끝나는 것을 보장
 
-	mov	x0, #3 << 20
+	mov	x0, #3 << 20 // 0x300000
+	/*
+	 * CPACR_EL1
+	 * Controls access to trace, SVE, Advanced SIMD and floating-point functionality.
+	 * FPEN, bits[21:20]을 0b11로 설정
+	 */
 	msr	cpacr_el1, x0			// Enable FP/ASIMD
-	mov	x0, #1 << 12			// Reset mdscr_el1 and disable
+	/*
+	 * MDSCR_EL1, TDCC, bit [12] = 0b1
+	 * Traps EL0 accesses to the DCC registers to EL1, from both Execution states.
+	 * EL0 using AArch64: EL0 accesses to the MDCCSR_EL0, DBGDTR_EL0,
+	 * DBGDTRTX_EL0, and DBGDTRRX_EL0 registers are trapped to EL1.
+	 */
+	mov	x0, #1 << 12 // 0x1000		// Reset mdscr_el1 and disable
 	msr	mdscr_el1, x0			// access to the DCC from EL0
+	/*
+	 * isb: 모든명령어가 실행되고 나서 다음 명령어가 실행되는 것을 보장
+	 */
 	isb					// Unmask debug exceptions now,
+	/*
+	 * enable_dbg 		msr daifclr, #8
+	 * DAIF중 D를 clear 즉 debugging 사용
+	 */
 	enable_dbg				// since this is per-cpu
+	/*
+	 * assembler.h:461
+	 */
 	reset_pmuserenr_el0 x0			// Disable PMU access from EL0
 	/*
 	 * Memory region attributes for LPAE:
@@ -427,6 +448,10 @@ ENTRY(__cpu_setup)
 	 *   NORMAL		100	11111111
 	 *   NORMAL_WT		101	10111011
 	 */
+	 /*
+	  * MAIR(Memory Attribute Indirection Register)
+	  * MAIR(attr, mt) ((attr) << ((mt) * 8))
+	  */
 	ldr	x5, =MAIR(0x00, MT_DEVICE_nGnRnE) | \
 		     MAIR(0x04, MT_DEVICE_nGnRE) | \
 		     MAIR(0x0c, MT_DEVICE_GRE) | \
@@ -437,14 +462,18 @@ ENTRY(__cpu_setup)
 	/*
 	 * Prepare SCTLR
 	 */
-	mov_q	x0, SCTLR_EL1_SET
+	mov_q	x0, SCTLR_EL1_SET // x0 := SCTLR_EL1_SET
 	/*
 	 * Set/prepare TCR and TTBR. We use 512GB (39-bit) address range for
 	 * both user and kernel.
 	 */
+	// 책 73~74설명 참조
 	ldr	x10, =TCR_TxSZ(VA_BITS) | TCR_CACHE_FLAGS | TCR_SMP_FLAGS | \
 			TCR_TG_FLAGS | TCR_KASLR_FLAGS | TCR_ASID16 | \
 			TCR_TBI0 | TCR_A1 | TCR_KASAN_FLAGS
+	/*
+	 * tcr_clear_errata_bits - Clear TCR bits that trigger an errata on this CPU.  
+	 */
 	tcr_clear_errata_bits x10, x9, x5
 
 #ifdef CONFIG_ARM64_USER_VA_BITS_52
@@ -454,24 +483,31 @@ ENTRY(__cpu_setup)
 #else
 	ldr_l		x9, idmap_t0sz
 #endif
+	// x9레지스터의 [5:0] 비트를 x10에 쓴다.
 	tcr_set_t0sz	x10, x9
 
 	/*
 	 * Set the IPS bits in TCR_EL1.
 	 */
-	tcr_compute_pa_size x10, #TCR_IPS_SHIFT, x5, x6
-#ifdef CONFIG_ARM64_HW_AFDBM
+	 /*
+	  * tcr_compute_pa_size - set TCR.(I)PS to the highest supported
+	  * ID_AA64MMFR0_EL1.PARange value
+	  * tcr_compute_pa_size, tcr, pos
+	  */
+	tcr_compute_pa_size x10, #TCR_IPS_SHIFT, x5, x6 // #TCR_IPS_SHIFT 32
+#ifdef CONFIG_ARM64_HW_AFDBM // ../Kconfig
 	/*
 	 * Enable hardware update of the Access Flags bit.
 	 * Hardware dirty bit management is enabled later,
 	 * via capabilities.
 	 */
-	mrs	x9, ID_AA64MMFR1_EL1
-	and	x9, x9, #0xf
-	cbz	x9, 1f
+	mrs	x9, ID_AA64MMFR1_EL1 // x9 := ID_AA64MMFR1_EL1
+	and	x9, x9, #0xf // x9 := x9[3:0]
+	cbz	x9, 1f // 비교하고 0이면 분기
 	orr	x10, x10, #TCR_HA		// hardware Access flag update
 1:
 #endif	/* CONFIG_ARM64_HW_AFDBM */
+	/* 준비한  x10레지스터의 값을 TCR_EL1에 쓴다 */
 	msr	tcr_el1, x10
 	ret					// return to head.S
 ENDPROC(__cpu_setup)
