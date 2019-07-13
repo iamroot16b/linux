@@ -234,7 +234,7 @@ SECTIONS
 
 	. = ALIGN(PAGE_SIZE);
 	init_pg_dir = .;
-	. += INIT_DIR_SIZE;
+	. += INIT_DIR_SIZE; // (PAGE_SIZE * EARLY_PAGES(KIMAGE_VADDR + TEXT_OFFSET, _end))
 	init_pg_end = .;
 
 	__pecoff_data_size = ABSOLUTE(. - __initdata_begin);

@@ -574,6 +574,8 @@ USER(\label, ic	ivau, \tmp2)			// invalidate I line PoU
  */
 	.macro	offset_ttbr1, ttbr
 #ifdef CONFIG_ARM64_USER_VA_BITS_52
+	// #define TTBR1_BADDR_4852_OFFSET	(((UL(1) << (52 - PGDIR_SHIFT)) - \
+	// 				 (UL(1) << (48 - PGDIR_SHIFT))) * 8)
 	orr	\ttbr, \ttbr, #TTBR1_BADDR_4852_OFFSET
 #endif
 	.endm

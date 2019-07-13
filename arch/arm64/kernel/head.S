@@ -533,15 +533,21 @@ ENDPROC(__create_page_tables)
  *   x0 = __PHYS_OFFSET
  */
 __primary_switched:
-	adrp	x4, init_thread_union
-	add	sp, x4, #THREAD_SIZE
-	adr_l	x5, init_task
+	// * init_thread_union
+	// .data..init_task 라는 별도의 섹션에 저장하고,
+	// thread_info 구조체의 초깃값이 설정되어 있다.
+	adrp	x4, init_thread_union // x4 := &init_thread_union
+	add	sp, x4, #THREAD_SIZE // sp := x4 + #THREAD_SIZE 
+	adr_l	x5, init_task	// x := __pa(init_task)
 	msr	sp_el0, x5			// Save thread_info
 
+	// EL1에서 익셉션이 발생하면 vectors 테이블을 찾아가
+	// 익셉션에 해당하는 오프셋 명령을 실행을 위해 VBAR_EL1에 저장
 	adr_l	x8, vectors			// load VBAR_EL1 with virtual
 	msr	vbar_el1, x8			// vector table address
 	isb
 
+	// 2019.07.20 9주차 시작점
 	stp	xzr, x30, [sp, #-16]!
 	mov	x29, sp
 
@@ -922,27 +928,50 @@ ENDPROC(__secondary_switched)
  * If it isn't, park the CPU
  */
 ENTRY(__enable_mmu)
-	mrs	x2, ID_AA64MMFR0_EL1
+	/*
+	 * MMFR(Memory Model Feature Register) 의 Translation Granule 필드를 보고
+	 * 커널에서 설정한 페이지 크기가 지원 가능한지 검사
+	 */
+	mrs	x2, ID_AA64MMFR0_EL1 // x2 := ID_AA64MMFR0_EL1
+	// ubfx : Unsigned Bitfield Extract.
+	// x2 = x2[#ID_AA64MMFR0_TGRAN_SHIFT + 3:#ID_AA64MMFR0_TGRAN_SHIFT]
+	// ex) 4K page
+	//	x2 = x2[31:28]
 	ubfx	x2, x2, #ID_AA64MMFR0_TGRAN_SHIFT, 4
+    // #ID_AA64MMFR0_TGRAN_SUPPORTED
+	//	4KB/64KB 일때 0x0
+	//	16KB 일때 0x1 
 	cmp	x2, #ID_AA64MMFR0_TGRAN_SUPPORTED
-	b.ne	__no_granule_support
-	update_early_cpu_boot_status 0, x2, x3
-	adrp	x2, idmap_pg_dir
+	b.ne	__no_granule_support // 지원하지 않으면 wait for event/interrupt.
+	update_early_cpu_boot_status 0, x2, x3 //  CPU가 정상 부팅했음을 기록
+	adrp	x2, idmap_pg_dir // x2 := &idmap_pg_dir
+	// x1 := &init_pg_dir
+	// x2 := &idmap_pg_dir
+	/*
+	 * phys_to_ttbr
+	 * Arrange a physical address, taking care of 52-bit address
+	 */
 	phys_to_ttbr x1, x1
 	phys_to_ttbr x2, x2
-	msr	ttbr0_el1, x2			// load TTBR0
-	offset_ttbr1 x1
-	msr	ttbr1_el1, x1			// load TTBR1
+	msr	ttbr0_el1, x2			// load TTBR0 ttbr0_el1 := x2
+	/*
+	 * offset_ttbr1
+	 * Offset ttbr1 to allow for 48-bit kernel VAs set with 52-bit PTRS_PER_PGD.
+	 */
+	offset_ttbr1 x1 // For 52-bit
+	msr	ttbr1_el1, x1			// load TTBR1 ttbr1_el1 := x1
 	isb
-	msr	sctlr_el1, x0
+	msr	sctlr_el1, x0 // sctlr_el1 := x0
+					  // mm/proc.S 참조
+					  // __create_page_tables 에서 저장한 SCTLR_EL1_SET 값 sctlr_el1 reg에 저장
 	isb
 	/*
 	 * Invalidate the local I-cache so that any instructions fetched
 	 * speculatively from the PoC are discarded, since they may have
 	 * been dynamically patched at the PoU.
 	 */
-	ic	iallu
-	dsb	nsh
+	ic	iallu // Invalidate all instruction caches to Point of Unification (PoU)
+	dsb	nsh // Barrier operation only out to the Point of Unification (PoU)
 	isb
 	ret
 ENDPROC(__enable_mmu)
@@ -972,8 +1001,8 @@ __no_granule_support:
 	update_early_cpu_boot_status \
 		CPU_STUCK_IN_KERNEL | CPU_STUCK_REASON_NO_GRAN, x1, x2
 1:
-	wfe
-	wfi
+	wfe // wait for event.
+	wfi // wait for interrupt.
 	b	1b
 ENDPROC(__no_granule_support)
 
@@ -987,14 +1016,24 @@ __relocate_kernel:
 	ldr	w10, =__rela_size		// size of reloc table
 
 	mov_q	x11, KIMAGE_VADDR		// default virtual offset
+	// x23: physical misalignment/KASLR offset
 	add	x11, x11, x23			// actual virtual offset
 	add	x9, x9, x11			// __va(.rela)
 	add	x10, x9, x10			// __va(.rela) + sizeof(.rela)
 
 0:	cmp	x9, x10
-	b.hs	1f
+	b.hs	1f // if (x9 >= x10) goto 1f
+
+	/*
+	 * Result
+	 * x11 := *x9
+	 * x12 := *(x9 + 8)
+	 * x13 := *(x9 + 16)
+	 * x9 = x9 + 24
+	 */
 	ldp	x11, x12, [x9], #24
 	ldr	x13, [x9, #-8]
+	// R_AARCH64_RELATIVE == 1027
 	cmp	w12, #R_AARCH64_RELATIVE
 	b.ne	0b
 	add	x13, x13, x23			// relocate
@@ -1006,11 +1045,12 @@ ENDPROC(__relocate_kernel)
 
 __primary_switch:
 #ifdef CONFIG_RANDOMIZE_BASE
+	// Randomize base 일때 New SCTLR_EL1 reg 와 Old SCTLR_EL1 x19,x20에 저장
 	mov	x19, x0				// preserve new SCTLR_EL1 value
 	mrs	x20, sctlr_el1			// preserve old SCTLR_EL1 value
 #endif
 
-	adrp	x1, init_pg_dir
+	adrp	x1, init_pg_dir // x1 := &init_pg_dir
 	bl	__enable_mmu
 #ifdef CONFIG_RELOCATABLE
 	bl	__relocate_kernel
@@ -1039,8 +1079,8 @@ __primary_switch:
 	isb
 
 	bl	__relocate_kernel
-#endif
-#endif
+#endif // CONFIG_RANDOMIZE_BASE
+#endif // CONFIG_RELOCATABLE
 	ldr	x8, =__primary_switched
 	adrp	x0, __PHYS_OFFSET
 	br	x8
