@@ -806,11 +806,10 @@ set_cpu_boot_mode_flag:
 	b.ne	1f
 	// if (w0 == #BOOT_CPU_MODE_EL2)
 	// {
-	add	x1, x1, #4 // #BOOT_CPU_MODE_EL1 = x1 + #4
+	add	x1, x1, #4 // __boot_cpu_mode 주소에서 4byte 만큼 옮김 (byte *)&__boot_cpu_mode + 4
 	// }
-1:	str	w0, [x1]		// *x1 = w0, This CPU has booted in EL1
-						// if (w0 == #BOOT_CPU_MODE_EL2) 
-						//	BOOT_CPU_MODE_EL1 = BOOT_CPU_MODE_EL2
+1:	str	w0, [x1]		// if (w0 == #BOOT_CPU_MODE_EL1) __boot_cpu_mode = #BOOT_CPU_MODE_EL1
+						// if (w0 == #BOOT_CPU_MODE_EL2) *(int *)((byte *)&__boot_cpu_mode + 4) = #BOOT_CPU_MODE_EL2
 	dmb	sy
 	dc	ivac, x1		// Invalidate potentially stale cache line
 	ret
