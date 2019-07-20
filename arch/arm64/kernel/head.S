@@ -548,22 +548,22 @@ __primary_switched:
 	isb
 
 	// 2019.07.20 9주차 시작점
-	stp	xzr, x30, [sp, #-16]!
-	mov	x29, sp
+	stp	xzr, x30, [sp, #-16]! // $(sp - 16) := xzr, $(sp - 8) := x30, sp -= 16, write back
+	mov	x29, sp // x29 := sp
 
-	str_l	x21, __fdt_pointer, x5		// Save FDT pointer
+	str_l	x21, __fdt_pointer, x5		// Save FDT pointer, *(__fdt_pointer) = x21, x5: =tmp
 
-	ldr_l	x4, kimage_vaddr		// Save the offset between
-	sub	x4, x4, x0			// the kernel virtual and
-	str_l	x4, kimage_voffset, x5		// physical mappings
+	ldr_l	x4, kimage_vaddr		// Save the offset between x4 := *(kimage_vaddr)
+	sub	x4, x4, x0			// the kernel virtual and x4 := (x4 - x0) : 커널의 가상 주소와 물리 주소 사이의 오프셋
+	str_l	x4, kimage_voffset, x5		// physical mappings *(kimage_voffset) := x4 을 kimage_voffset에 저장한다
 
 	// Clear BSS
-	adr_l	x0, __bss_start
-	mov	x1, xzr
-	adr_l	x2, __bss_stop
-	sub	x2, x2, x0
-	bl	__pi_memset
-	dsb	ishst				// Make zero page visible to PTW
+	adr_l	x0, __bss_start // x0 := __bss_start
+	mov	x1, xzr // x1 := 0
+	adr_l	x2, __bss_stop // x2 := __bss_stop
+	sub	x2, x2, x0 // x2 := (__bss_stop - __bss_start)
+	bl	__pi_memset 
+	dsb	ishst				// Make zero page visible to PTW, BSS영역 초기화 완료를 대기
 
 #ifdef CONFIG_KASAN
 	bl	kasan_early_init
