@@ -548,7 +548,7 @@ asmlinkage __visible void __init start_kernel(void)
 	char *after_dashes;
 
 	set_task_stack_end_magic(&init_task);
-	smp_setup_processor_id();
+	smp_setup_processor_id(); // arch/arm64/kernel/setup.c
 	debug_objects_early_init();
 
 	cgroup_init_early();

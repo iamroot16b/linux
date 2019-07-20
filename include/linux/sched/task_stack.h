@@ -23,6 +23,7 @@ static inline void *task_stack_page(const struct task_struct *task)
 
 #define setup_thread_stack(new,old)	do { } while(0)
 
+// CONFIG_THREAD_INFO_IN_TASK가 정의 되었을 때
 static inline unsigned long *end_of_stack(const struct task_struct *task)
 {
 	return task->stack;
@@ -47,12 +48,16 @@ static inline void setup_thread_stack(struct task_struct *p, struct task_struct 
  * When the stack grows up, this is the highest address.
  * Beyond that position, we corrupt data on the next page.
  */
+// CONFIG_THREAD_INFO_IN_TASK가 정의되지 않았을 때
 static inline unsigned long *end_of_stack(struct task_struct *p)
 {
-#ifdef CONFIG_STACK_GROWSUP
+#ifdef CONFIG_STACK_GROWSUP // 스택이 상향으로 push되는 경우
 	return (unsigned long *)((unsigned long)task_thread_info(p) + THREAD_SIZE) - 1;
-#else
-	return (unsigned long *)(task_thread_info(p) + 1);
+#else // 스택이 하향으로 push되는 경우 (arm, arm64)
+	// task_thread_info(p)에서 return된 주소에 struct thread_info만큼 더하여 return한다.
+	return (unsigned long *)(task_thread_info(p) + 1); // task_thread_info()  (return &task->thread_info;)
+	
+
 #endif
 }
 
