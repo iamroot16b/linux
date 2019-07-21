@@ -95,14 +95,29 @@ u64 __cacheline_aligned boot_args[4];
 
 void __init smp_setup_processor_id(void)
 {
+	/*
+	SYS_MPIDR_EL1 // MPIDR(Multiprocessor Affinity Register)
+	package id = affinity 1 + (affnity 2 << 8) + (affnity 3 << 16)
+	core id = affinity 0
+	 */
 	u64 mpidr = read_cpuid_mpidr() & MPIDR_HWID_BITMASK;
-	cpu_logical_map(0) = mpidr;
+	cpu_logical_map(0) = mpidr; // __cpu_logical_map[0] = mpidr;
 
 	/*
 	 * clear __my_cpu_offset on boot CPU to avoid hang caused by
 	 * using percpu variable early, for example, lockdep will
 	 * access percpu variable inside lock_release
 	 */
+	/*
+	TPIDR (Thread Process ID Registers)
+	
+	asm volatile(ALTERNATIVE("msr tpidr_el1, %0",
+				 "msr tpidr_el2, %0",  // Hypervisor mode
+				 ARM64_HAS_VIRT_HOST_EXTN)
+			:: "r" (off) : "memory");
+
+	asm(ALTERNATIVE(oldinstr, newinstr, feature))
+	*/
 	set_my_cpu_offset(0);
 	pr_info("Booting Linux on physical CPU 0x%010lx [0x%08x]\n",
 		(unsigned long)mpidr, read_cpuid_id());

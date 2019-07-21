@@ -548,7 +548,9 @@ asmlinkage __visible void __init start_kernel(void)
 	char *after_dashes;
 
 	set_task_stack_end_magic(&init_task);
-	smp_setup_processor_id(); // arch/arm64/kernel/setup.c
+	// 물리 cpuid를 논리 cpuid table에 저장 및 현재 프로세스 id 0번으로 세팅
+	smp_setup_processor_id();
+	//
 	debug_objects_early_init();
 
 	cgroup_init_early();

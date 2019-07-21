@@ -63,6 +63,7 @@ struct debug_obj_descr {
 	bool (*fixup_assert_init)(void *addr, enum debug_obj_state state);
 };
 
+//.config 파일 내에 CONFIG_DEBUG_OBJECTS 가 정의
 #ifdef CONFIG_DEBUG_OBJECTS
 extern void debug_object_init      (void *addr, struct debug_obj_descr *descr);
 extern void
