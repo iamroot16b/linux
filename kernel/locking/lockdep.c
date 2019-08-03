@@ -4239,6 +4239,9 @@ int lock_is_held_type(const struct lockdep_map *lock, int read)
 	unsigned long flags;
 	int ret = 0;
 
+	// current 는 thread_info 구조체의 주소를 가져오는 매크로
+	// lockdep_recursion은 task_struct 안에 존재하는 변수
+	// 
 	if (unlikely(current->lockdep_recursion))
 		return 1; /* avoid false negative lockdep_assert_held() */
 

@@ -144,6 +144,7 @@ struct cpuset {
 	int pn;
 
 	/* for custom sched domain */
+	// CPU 스케줄링 관련 변수
 	int relax_domain_level;
 
 	/* number of CPUs in subparts_cpus */
@@ -512,6 +513,9 @@ static inline int alloc_cpumasks(struct cpuset *cs, struct tmpmasks *tmp)
 		pmask3 = &tmp->delmask;
 	}
 
+	// zalloc_cpumask_var: mask를 0으로 초기화
+	// 설정(#ifdef CONFIG_CPUMASK_OFFSTACK)에 따라서 kzalloc을 이용하여 
+	// 0으로 초기화 된 메모리를 할당하기도 한다.
 	if (!zalloc_cpumask_var(pmask1, GFP_KERNEL))
 		return -ENOMEM;
 
@@ -2672,22 +2676,32 @@ cpuset_css_alloc(struct cgroup_subsys_state *parent_css)
 {
 	struct cpuset *cs;
 
+	// NULL인 경우에는 top_cpuset.css을 사용 
 	if (!parent_css)
 		return &top_cpuset.css;
 
+	// kzalloc - allocate memory. The memory is set to zero.
+	// kmalloc(size, flags | __G
 	cs = kzalloc(sizeof(*cs), GFP_KERNEL);
 	if (!cs)
 		return ERR_PTR(-ENOMEM);
 
+	// alloc_cpumasks: 설정에 따라  
+	// 0 if successful, -ENOMEM otherwise.
 	if (alloc_cpumasks(cs, NULL)) {
 		kfree(cs);
 		return ERR_PTR(-ENOMEM);
 	}
 
+	// set_bit:
+	// p[nr / __BITS_PER_LONG] |= 1UL << (nr % __BITS_PER_LONG);
 	set_bit(CS_SCHED_LOAD_BALANCE, &cs->flags);
+	// nodes_clear: 0으로 초기화
 	nodes_clear(cs->mems_allowed);
 	nodes_clear(cs->effective_mems);
+	// 특정 이벤트의 발생 빈도를 측정하는 구조체를 초기화
 	fmeter_init(&cs->fmeter);
+	// CPU 스케줄링 관련 변수 (sched_relax_domain_level = -1일때의 기본값)
 	cs->relax_domain_level = -1;
 
 	return &cs->css;

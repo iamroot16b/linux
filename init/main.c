@@ -555,6 +555,7 @@ asmlinkage __visible void __init start_kernel(void)
 
 	cgroup_init_early();
 
+	// 2019.08.17, 11주차 시작 cgroup_init_early()의 맨 마지막 online_css()분석 필요
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 

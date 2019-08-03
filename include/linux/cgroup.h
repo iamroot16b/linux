@@ -26,7 +26,6 @@
 #include <linux/kernel_stat.h>
 
 #include <linux/cgroup-defs.h>
-
 #ifdef CONFIG_CGROUPS
 
 /*
@@ -535,6 +534,8 @@ static inline struct cgroup *cgroup_parent(struct cgroup *cgrp)
 	struct cgroup_subsys_state *parent_css = cgrp->self.parent;
 
 	if (parent_css)
+		// container_of: cgroup_subsys_state *를 struct cgroup *로 형변환
+		// 만일 struct cgroup내의 self의 위치가 변하여도 코드를 수정할 필요는 없음
 		return container_of(parent_css, struct cgroup, self);
 	return NULL;
 }

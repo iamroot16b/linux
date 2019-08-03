@@ -466,6 +466,7 @@ static struct cgroup_subsys_state *cgroup_css(struct cgroup *cgrp,
 					      struct cgroup_subsys *ss)
 {
 	if (ss)
+		// cgrp->subsys에서 ss->id에 해당하는 css를 가져온다.
 		return rcu_dereference_check(cgrp->subsys[ss->id],
 					lockdep_is_held(&cgroup_mutex));
 	else
@@ -4820,26 +4821,45 @@ static void css_release(struct percpu_ref *ref)
 static void init_and_link_css(struct cgroup_subsys_state *css,
 			      struct cgroup_subsys *ss, struct cgroup *cgrp)
 {
+	// cgroup_mutex가 잠겨있지 않으면 경고 출력(WARN, config: #define CONFIG_LOCKDEP)
 	lockdep_assert_held(&cgroup_mutex);
 
+	// cgrp->self->refcnt를 1만큼 증가시킨다.
+	// 아래의 css->cgroup = cgrp; 에서 참조하는 수 증가
 	cgroup_get_live(cgrp);
 
 	memset(css, 0, sizeof(*css));
 	css->cgroup = cgrp;
 	css->ss = ss;
 	css->id = -1;
+	// 자기 자신을 가리키도록 초기화
 	INIT_LIST_HEAD(&css->sibling);
 	INIT_LIST_HEAD(&css->children);
 	INIT_LIST_HEAD(&css->rstat_css_node);
+
+	// css_serical_nr_next: css가 할당될 때 마다 증가하는 static 변수
 	css->serial_nr = css_serial_nr_next++;
+	// 0으로 초기화
 	atomic_set(&css->online_cnt, 0);
 
+	/*
+	 * cgroup_parent:
+	 * config: #define CONFIG_CGROUPS
+	 * 옵션이 꺼져있을 때, cgroup_parent(cgrp) -> NULL
+	 * 옵션이 켜저있을 때, cgrp->self.parent(cgroup)를 반환
+	 */
 	if (cgroup_parent(cgrp)) {
+		// cgrp->self.parent의 subsys list에서 ss(sub systems)에 해당하는 css를 가져와서
+		// css->parent에 대입.
 		css->parent = cgroup_css(cgroup_parent(cgrp), ss);
+		// css->parent의 레퍼런스 카운터 증가
 		css_get(css->parent);
 	}
 
+	// cgroup_on_dfl - test whether a cgroup is on the default hierarchy
+	//
 	if (cgroup_on_dfl(cgrp) && ss->css_rstat_flush)
+		// cgrp->rstat_css_list에 css->rstat_css_node를 삽입. (이중링크드리스트)
 		list_add_rcu(&css->rstat_css_node, &cgrp->rstat_css_list);
 
 	BUG_ON(cgroup_css(cgrp, ss));
@@ -5336,14 +5356,23 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 
 	mutex_lock(&cgroup_mutex);
 
+	// cgroup subsystem의 IDR을 초기화
 	idr_init(&ss->css_idr);
+	// cftypes의 리스트를 초기화 (cgroup control files)
 	INIT_LIST_HEAD(&ss->cfts);
 
 	/* Create the root cgroup state for this subsystem */
 	ss->root = &cgrp_dfl_root;
+	// cgroup_css:  obtain a cgroup's css for the specified subsystem
+	// css_alloc: 각 서브시스템에 대한 [subsystem]_css_alloc()을 호출
+	// cpuset_css_alloc()을 분석하였음.
+	// return value: struct cgroup_subsys_state *
 	css = ss->css_alloc(cgroup_css(&cgrp_dfl_root.cgrp, ss));
+	
 	/* We don't handle early failures gracefully */
+	// BUG_ON: pr_warn("BUG: failure at %s:%d/%s()!\n", 현재 파일명, 해당 줄, __func__);
 	BUG_ON(IS_ERR(css));
+
 	init_and_link_css(css, ss, &cgrp_dfl_root.cgrp);
 
 	/*
@@ -5352,6 +5381,7 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 	 */
 	css->flags |= CSS_NO_REF;
 
+	// early == true일 때만 분석하였음. (2019.08.03)
 	if (early) {
 		/* allocation can't be done safely during early init */
 		css->id = 1;
@@ -5366,6 +5396,7 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 	 * init_css_set is in the subsystem's root cgroup. */
 	init_css_set.subsys[ss->id] = css;
 
+	// ss->*는 함수 포인터, ss->id에 해당하는 부분이 1이면 callback이 존재한다는 뜻
 	have_fork_callback |= (bool)ss->fork << ss->id;
 	have_exit_callback |= (bool)ss->exit << ss->id;
 	have_release_callback |= (bool)ss->release << ss->id;
@@ -5376,6 +5407,7 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 	 * need to invoke fork callbacks here. */
 	BUG_ON(!list_empty(&init_task.tasks));
 
+	// 11주차 분석 시작
 	BUG_ON(online_css(css));
 
 	mutex_unlock(&cgroup_mutex);
@@ -5407,11 +5439,14 @@ int __init cgroup_init_early(void)
 		WARN(strlen(cgroup_subsys_name[i]) > MAX_CGROUP_TYPE_NAMELEN,
 		     "cgroup_subsys_name %s too long\n", cgroup_subsys_name[i]);
 
+		// cgroup subsystem의 id설정
 		ss->id = i;
+		// cgroup subsystem의 이름 설정
 		ss->name = cgroup_subsys_name[i];
+		// legacy_name이 NULL인 경우 ss->name과 동일하게 설정
 		if (!ss->legacy_name)
 			ss->legacy_name = cgroup_subsys_name[i];
-
+		// early_init(boolean)이 true인 경우.
 		if (ss->early_init)
 			cgroup_init_subsys(ss, true);
 	}

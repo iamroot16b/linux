@@ -11,9 +11,15 @@
  * See Documentation/atomic_bitops.txt for details.
  */
 
+/*
+ * atomic하지 않은 동일한 코드
+ * p[nr / __BITS_PER_LONG] |= 1UL << (nr % __BITS_PER_LONG);
+ */
 static inline void set_bit(unsigned int nr, volatile unsigned long *p)
 {
+	// p += ((nr) / 64) (arm64)
 	p += BIT_WORD(nr);
+	// BIT_MASK: (1UL << ((nr) % BITS_PER_LONG(64)))
 	atomic_long_or(BIT_MASK(nr), (atomic_long_t *)p);
 }
 
