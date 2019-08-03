@@ -1921,10 +1921,18 @@ void init_cgroup_root(struct cgroup_fs_context *ctx)
 	struct cgroup_root *root = ctx->root;
 	struct cgroup *cgrp = &root->cgrp;
 
+	// struct list_head {*next, *prev} root_list;
+	// root_list 양방향 링크드 리스트가 자기자신을 가리키도록 초기화
 	INIT_LIST_HEAD(&root->root_list);
+	// croups의 개수를 1로 초기화
 	atomic_set(&root->nr_cgrps, 1);
 	cgrp->root = root;
+	// cgroup 내부 몇몇자료들을 초기화 (추후 정리 필요)
 	init_cgroup_housekeeping(cgrp);
+	
+	// (정수 ID를 관리하는) Rdix tree 구조체를 관리하는(추측) IDR 구조체 초기화
+	// http://jake.dothome.co.kr/idr/
+	// http://jake.dothome.co.kr/radix-tree/
 	idr_init(&root->cgroup_idr);
 
 	root->flags = ctx->flags;
@@ -5425,13 +5433,18 @@ int __init cgroup_init_early(void)
 	struct cgroup_subsys *ss;
 	int i;
 
+	// cgroup_root 구조체 포인터 저장
 	ctx.root = &cgrp_dfl_root;
+	// cgroup_root 구조체 초기화
 	init_cgroup_root(&ctx);
-	cgrp_dfl_root.cgrp.self.flags |= CSS_NO_REF;
+	cgrp_dfl_root.cgrp.self.flags |= CSS_NO_REF; // no reference counting for this css
 
+	// init_task.cgroups = &init_css_set;
 	RCU_INIT_POINTER(init_task.cgroups, &init_css_set);
 
+	// 모든 cgroup 서브시스템들을 대상으로 earlyinit이 설정된 서브시스템을 초기화
 	for_each_subsys(ss, i) {
+		// WARN(condition, format) 참이면 출력
 		WARN(!ss->css_alloc || !ss->css_free || ss->name || ss->id,
 		     "invalid cgroup_subsys %d:%s css_alloc=%p css_free=%p id:name=%d:%s\n",
 		     i, cgroup_subsys_name[i], ss->css_alloc, ss->css_free,

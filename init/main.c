@@ -550,9 +550,10 @@ asmlinkage __visible void __init start_kernel(void)
 	set_task_stack_end_magic(&init_task);
 	// 물리 cpuid를 논리 cpuid table에 저장 및 현재 프로세스 id 0번으로 세팅
 	smp_setup_processor_id();
-	//
+	// 디버깅을 위한 구조체들 초기화
 	debug_objects_early_init();
 
+	// 
 	cgroup_init_early();
 
 	// 2019.08.17, 11주차 시작 cgroup_init_early()의 맨 마지막 online_css()분석 필요
