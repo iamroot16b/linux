@@ -1109,10 +1109,15 @@ void __init debug_objects_early_init(void)
 	// obj_hash 배열의 모든 lock 들 unlock 표시
 	for (i = 0; i < ODEBUG_HASH_SIZE; i++)
 		raw_spin_lock_init(&obj_hash[i].lock);
+	
+	// 10주차 시작
 	// ODEBUG_POOL_SIZE == 1024
 	// obj_static_pool : 객체 디버깅을 위한 구조체
 	// obj_pool : obj_static_pool 구조체 배열에 대한 양방향 링크드리스트 헤드
-	// 10주차 시작
+	// 링크 참고 : https://wariua.github.io/facility/long-list-of-linked-lists.html
+	
+	// obj_pool 이라는 헤더 노드와 각 node에 대한 링크드리스트 초기화
+	// h = h1023 = h1022 = ... = h0 -> NULL
 	for (i = 0; i < ODEBUG_POOL_SIZE; i++)
 		hlist_add_head(&obj_static_pool[i].node, &obj_pool);
 }
