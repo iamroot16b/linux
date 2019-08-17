@@ -553,10 +553,10 @@ asmlinkage __visible void __init start_kernel(void)
 	// 디버깅을 위한 구조체들 초기화
 	debug_objects_early_init();
 
-	// 
+	// cgroup 초기화 
+	// 2019.08.17, 11주차 시작 cgroup_init_early()의 맨 마지막 online_css()분석 필요
 	cgroup_init_early();
 
-	// 2019.08.17, 11주차 시작 cgroup_init_early()의 맨 마지막 online_css()분석 필요
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 

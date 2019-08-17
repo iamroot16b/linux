@@ -4881,12 +4881,15 @@ static int online_css(struct cgroup_subsys_state *css)
 
 	lockdep_assert_held(&cgroup_mutex);
 
+    // css_online이 있으면 호출
 	if (ss->css_online)
 		ret = ss->css_online(css);
+	// css_online이 없거나, 반환 값이 0이면 online 설정
 	if (!ret) {
 		css->flags |= CSS_ONLINE;
 		rcu_assign_pointer(css->cgroup->subsys[ss->id], css);
 
+		// 자신과 부모의 online count 증가.
 		atomic_inc(&css->online_cnt);
 		if (css->parent)
 			atomic_inc(&css->parent->online_cnt);

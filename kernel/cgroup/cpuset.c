@@ -2713,7 +2713,6 @@ static int cpuset_css_online(struct cgroup_subsys_state *css)
 	struct cpuset *parent = parent_cs(cs);
 	struct cpuset *tmp_cs;
 	struct cgroup_subsys_state *pos_css;
-
 	if (!parent)
 		return 0;
 
@@ -2731,7 +2730,9 @@ static int cpuset_css_online(struct cgroup_subsys_state *css)
 	// cpuset에서 사용할 static-key를 활성화
 	cpuset_inc();
 
+	// irq 비활성 spin lock
 	spin_lock_irq(&callback_lock);
+	// cgroup v2 확인. 기본 계층구조 및 v2 flag 설정 된 경우는 v2로 동작함
 	if (is_in_v2_mode()) {
 		cpumask_copy(cs->effective_cpus, parent->effective_cpus);
 		cs->effective_mems = parent->effective_mems;
@@ -2765,6 +2766,7 @@ static int cpuset_css_online(struct cgroup_subsys_state *css)
 	}
 	rcu_read_unlock();
 
+    // group flag에 CGRP_CPUSET_CLONE_CHILDREN이 설정되있고, sibling에 cpu 또는 mem exclusive가 없으면 부모 값을 상속. man cpuset(7)
 	spin_lock_irq(&callback_lock);
 	cs->mems_allowed = parent->mems_allowed;
 	cs->effective_mems = parent->mems_allowed;
