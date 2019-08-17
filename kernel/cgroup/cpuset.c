@@ -2719,12 +2719,16 @@ static int cpuset_css_online(struct cgroup_subsys_state *css)
 
 	mutex_lock(&cpuset_mutex);
 
+	// cs->flags |= CS_ONLINE
 	set_bit(CS_ONLINE, &cs->flags);
+	// 부모에 SPREAD_PAGE 속성이 있으면 cs->flags |= CS_SPREAD_PAGE
 	if (is_spread_page(parent))
 		set_bit(CS_SPREAD_PAGE, &cs->flags);
+    // 부모에 SPREAD_SLAB 속성이 있으면 cs->flags |= CS_SPREAD_SLAB
 	if (is_spread_slab(parent))
 		set_bit(CS_SPREAD_SLAB, &cs->flags);
 
+	// cpuset에서 사용할 static-key를 활성화
 	cpuset_inc();
 
 	spin_lock_irq(&callback_lock);
