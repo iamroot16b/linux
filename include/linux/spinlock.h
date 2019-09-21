@@ -318,6 +318,7 @@ static __always_inline raw_spinlock_t *spinlock_check(spinlock_t *lock)
 	return &lock->rlock;
 }
 
+/* return 되는 spinlock의 주소를 사용하지 않는데 어떤 식으로 check? */
 #define spin_lock_init(_lock)				\
 do {							\
 	spinlock_check(_lock);				\

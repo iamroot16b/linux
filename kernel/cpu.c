@@ -2281,9 +2281,11 @@ void init_cpu_online(const struct cpumask *src)
  */
 void __init boot_cpu_init(void)
 {
+	/* !SMP cpu == 0 */
 	int cpu = smp_processor_id();
 
 	/* Mark the boot cpu "present", "online" etc for SMP and UP case */
+	/* 부팅시 사용한 cpu의 상태를 나타내는 비트맵(online, active, present, possible)을 true로 설정 */
 	set_cpu_online(cpu, true);
 	set_cpu_active(cpu, true);
 	set_cpu_present(cpu, true);

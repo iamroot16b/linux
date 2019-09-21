@@ -475,7 +475,9 @@ void __init page_address_init(void)
 {
 	int i;
 
+	/* page_table_address는struct page_address_slot의 배열 (크기: 128) */ 
 	for (i = 0; i < ARRAY_SIZE(page_address_htable); i++) {
+		/* list의 head를 자기 자신을 가리키도록  초기화 */
 		INIT_LIST_HEAD(&page_address_htable[i].lh);
 		spin_lock_init(&page_address_htable[i].lock);
 	}

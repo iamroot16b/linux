@@ -40,6 +40,7 @@
  */
 static inline void arch_local_irq_enable(void)
 {
+	// 현재 CPU의 인터럽트를 disable
 	asm volatile(ALTERNATIVE(
 		"msr	daifclr, #2		// arch_local_irq_enable\n"
 		"nop",
