@@ -331,7 +331,7 @@ ENDPROC(preserve_boot_args)
  *     been enabled
  */
 __create_page_tables:
-	mov	x28, lr // x28 := lr
+	mov	x28, lr // x28 := lr // 특수 목적 레지스터 
 
 	/*
 	 * Invalidate the init page tables to avoid potential dirty cache lines
@@ -359,7 +359,7 @@ __create_page_tables:
 	/*
 	 * init_pg 영역을 0으로 초기화 함
 	 */
-1:	stp	xzr, xzr, [x0], #16 // 16-byte 만큼 [x0](&x0)에 0을 씀, 이후 x0를 16만큼 증가.
+1:	stp	xzr, xzr, [x0], #16 // Store Pair of Registers, 16-byte 만큼 [x0](&x0)에 0을 씀, 이후 x0를 16만큼 증가.
 	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16 // 총 64bytes만큼 0을 씀
@@ -402,8 +402,10 @@ __create_page_tables:
 	 * sy는 옵션 -> 모든 시스템에 적용시키는 옵션.
 	 * __inval_cache_range 함수 내의 데이터 캐시 클린 명령어가 저장 명령어보다 먼저 실행되는 것을 막기 위함
 	 */
-	dmb	sy // 메모리
+	dmb	sy // Data Memory Barrier, sy : full system dmb operation
+        // vabits_user = x5 (#VA_BITS) 를 실제 메모리에 저장
 	dc	ivac, x6 // Invalidate potentially stale cache line
+        // 아마도 또 메모리 최신화 작업을 안하도록 캐시 무효화?
 
 	/*
 	 * VA_BITS may be too small to allow for an ID mapping to be created
@@ -418,23 +420,28 @@ __create_page_tables:
 	 * the physical address of __idmap_text_end.
 	 */
 	adrp	x5, __idmap_text_end
-	clz	x5, x5 // CLZ 명령어는 Rm의 값에서 앞에 오는 0의 수를 계산하여 결과를 Rd에 반환합니다.
+	clz	x5, x5 // count leading zero,
+       // CLZ 명령어는 Rm의 값에서 앞에 오는 0의 수를 계산하여 결과를 Rd에 반환합니다.
+
 	/*
 	 * TCR_T0SZ(x) ((UL(64) - (x)) << TCR_T0SZ_OFFSET) 
 	 * TCR_T0SZ_OFFSET 0
 	 * x5의 값이 MSB로부터 세었을 때 0의 개수가 많다면 크기가 작다는 의미이므로
 	 * (64 - VA_BITS)보다 작으면 VA의 range가 충분하다는 뜻
+         *
+         * 물리주소 공간과 가상주소 공간 사이의 idmap이 가능한지를 판단
 	 */
 	cmp	x5, TCR_T0SZ(VA_BITS)	// default T0SZ small enough?
 	b.ge	1f			// .. then skip VA range extension
 
-	adr_l	x6, idmap_t0sz
-	str	x5, [x6] // *idmat_t0sz = x5
+	adr_l	x6, idmap_t0sz // u64 idmap_t0sz = TCR_T0SZ(VA_BITS);
+	str	x5, [x6] // *idmap_t0sz = x5
 	dmb	sy
 	dc	ivac, x6		// Invalidate potentially stale cache line
 
 #if (VA_BITS < 48)
 #define EXTRA_SHIFT	(PGDIR_SHIFT + PAGE_SHIFT - 3)
+// 계산해보면 EXTRA_SHIFT == 기존 VA_BITS (?)
 #define EXTRA_PTRS	(1 << (PHYS_MASK_SHIFT - EXTRA_SHIFT))
 
 	/*
@@ -465,6 +472,9 @@ __create_page_tables:
 	 */
 	 /*
 	  * 책 p.71
+	  * x6: tmp2
+	  * x5: tmp1
+	  * x4: EXTRA_PTRS
 	  * x3: __idmap_text_start
 	  * x0: idmap_pg_dir
 	  */
