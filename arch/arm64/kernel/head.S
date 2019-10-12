@@ -526,7 +526,7 @@ __create_page_tables:
 	 * accesses (MMU disabled), invalidate the idmap and swapper page
 	 * tables again to remove any speculatively loaded cache lines.
 	 */
-	/* idmap_pg_dir과 init_pg_end에 해당하는 데이터 캐시를 무효화.
+	// idmap_pg_dir과 init_pg_end에 해당하는 데이터 캐시를 무효화.
 	adrp	x0, idmap_pg_dir
 	adrp	x1, init_pg_end
 	sub	x1, x1, x0
