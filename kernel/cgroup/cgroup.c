@@ -1901,7 +1901,7 @@ static void init_cgroup_housekeeping(struct cgroup *cgrp)
 	INIT_LIST_HEAD(&cgrp->cset_links);
 	INIT_LIST_HEAD(&cgrp->pidlists);
 	mutex_init(&cgrp->pidlist_mutex);
-	cgrp->self.cgroup = cgrp;
+	cgrp->self.cgroup = cgrp; // *cgrp == cgrp->self.cgroup == cgrp
 	cgrp->self.flags |= CSS_ONLINE;
 	cgrp->dom_cgrp = cgrp;
 	cgrp->max_descendants = INT_MAX;
@@ -1927,7 +1927,7 @@ void init_cgroup_root(struct cgroup_fs_context *ctx)
 	// croups의 개수를 1로 초기화
 	atomic_set(&root->nr_cgrps, 1);
 	cgrp->root = root;
-	// cgroup 내부 몇몇자료들을 초기화 (추후 정리 필요)
+	// cgroup 내부 몇몇자료들을 초기화
 	init_cgroup_housekeeping(cgrp);
 	
 	// (정수 ID를 관리하는) Rdix tree 구조체를 관리하는(추측) IDR 구조체 초기화
@@ -5440,6 +5440,7 @@ int __init cgroup_init_early(void)
 	ctx.root = &cgrp_dfl_root;
 	// cgroup_root 구조체 초기화
 	init_cgroup_root(&ctx);
+        // 16주차 완료(191019). 17주차 시작
 	cgrp_dfl_root.cgrp.self.flags |= CSS_NO_REF; // no reference counting for this css
 
 	// init_task.cgroups = &init_css_set;

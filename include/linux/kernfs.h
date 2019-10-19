@@ -158,7 +158,7 @@ struct kernfs_node {
 
 	union kernfs_node_id	id;
 	unsigned short		flags;
-	umode_t			mode;
+	umode_t			mode; // typedef unsigned short	umode_t;
 	struct kernfs_iattrs	*iattr;
 };
 
