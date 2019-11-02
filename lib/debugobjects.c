@@ -1105,7 +1105,7 @@ void __init debug_objects_early_init(void)
 {
 	int i;
 
-	// ODEBUG_HASH_SIZE == (1 << 14)
+	// ODEBUG_HASH_SIZE == (1 << 14) // 16K
 	// obj_hash 배열의 모든 lock 들 unlock 표시
 	for (i = 0; i < ODEBUG_HASH_SIZE; i++)
 		raw_spin_lock_init(&obj_hash[i].lock);

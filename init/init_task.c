@@ -65,7 +65,7 @@ struct task_struct init_task
 	.stack_refcount	= REFCOUNT_INIT(1),
 #endif
 	.state		= 0,
-	.stack		= init_stack,
+	.stack		= init_stack, // 16 KB = 8 B * 2048
 	.usage		= REFCOUNT_INIT(2),
 	.flags		= PF_KTHREAD,
 	.prio		= MAX_PRIO - 20,
