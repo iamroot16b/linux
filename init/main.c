@@ -564,7 +564,7 @@ asmlinkage __visible void __init start_kernel(void)
 	 * Interrupts are still disabled. Do necessary setups, then
 	 * enable them.
 	 */
-	/* 현재 부팅중인 cpu의상태 비트맵을 true로 셋팅 */
+	/* 현재 부팅중인 cpu 상태 비트맵을 true로 셋팅 */
 	boot_cpu_init();
 	page_address_init();
 	pr_notice("%s", linux_banner);

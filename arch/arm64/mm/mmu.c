@@ -802,16 +802,21 @@ void __init early_fixmap_init(void)
 	pmd_t *pmdp;
 	unsigned long addr = FIXADDR_START;
 
+        //init_mm의 pgd에서 fixmap start 주소에 해당하는 pgd 엔트리 주소를 반환
 	pgdp = pgd_offset_k(addr);
 	pgd = READ_ONCE(*pgdp);
 	if (CONFIG_PGTABLE_LEVELS > 3 &&
 	    !(pgd_none(pgd) || pgd_page_paddr(pgd) == __pa_symbol(bm_pud))) {
+                // 앞에서 읽은 fixmap에 해당하는 pgd 엔트리 값이 있으면서
+                // 엔트리값이 bm_pud랑 연관되지 않게 세팅되어 있으면 아래 루틴을 처리
 		/*
 		 * We only end up here if the kernel mapping and the fixmap
 		 * share the top level pgd entry, which should only happen on
 		 * 16k/4 levels configurations.
 		 */
 		BUG_ON(!IS_ENABLED(CONFIG_ARM64_16K_PAGES));
+                // 191110 일요일 19주차 마지막
+                // 20주차 시작
 		pudp = pud_offset_kimg(pgdp, addr);
 	} else {
 		if (pgd_none(pgd))

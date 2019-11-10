@@ -517,6 +517,7 @@ atomic_or(int i, atomic_t *v)
 	arch_atomic_or(i, v);
 }
 #define atomic_or atomic_or
+// 함수 이름과 동일한 이름의 매크로를 설정하면 전처리에서 존재여부 체크 가능
 
 #if !defined(arch_atomic_fetch_or_relaxed) || defined(arch_atomic_fetch_or)
 static inline int
