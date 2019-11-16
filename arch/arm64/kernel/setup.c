@@ -305,7 +305,9 @@ void __init setup_arch(char **cmdline_p)
 
 	*cmdline_p = boot_command_line;
 
+        // fixmap 영역에 대한 (임시) 페이지 테이블 생성
 	early_fixmap_init();
+        // fixmap 에 BTMAP을 페이지 단위로 접근할 수 있게 주소를 배열에 저장
 	early_ioremap_init();
 
 	setup_machine_fdt(__fdt_pointer);

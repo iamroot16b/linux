@@ -130,6 +130,9 @@ static bool pgattr_change_is_safe(u64 old, u64 new)
 	 * The following mapping attributes may be updated in live
 	 * kernel mappings without the need for break-before-make.
 	 */
+        // PTE_PXN, PTE_RDONLY, PTE_WRITE 는 바뀌어도 되는 성질
+        // PTE_NG는 Global로 바뀌는지만 체크
+        // 나머지가 바뀌는지도 체크
 	static const pteval_t mask = PTE_PXN | PTE_RDONLY | PTE_WRITE | PTE_NG;
 
 	/* creating or taking down mappings is always safe */
@@ -816,13 +819,21 @@ void __init early_fixmap_init(void)
 		 */
 		BUG_ON(!IS_ENABLED(CONFIG_ARM64_16K_PAGES));
                 // 191110 일요일 19주차 마지막
-                // 20주차 시작
+                // 20주차 시작 == 23주차 (다른조와 혼동을 막기 위해...)
 		pudp = pud_offset_kimg(pgdp, addr);
 	} else {
 		if (pgd_none(pgd))
+                        // head.S에서 세팅한 init_pg 테이블이 fixmap을 커버하지 못하는 경우 
+                        // // (init_pg_dir => (pgd .. |.. |pte) 순으로 설정됨) 
+                        // init_pg 테이블에 fixmap을 mapping하는 pud table을 삽입하기가
+                        // 매우 어려우므로 bm_pud라는 배열 공간에 pud table을 생성함. 
 			__pgd_populate(pgdp, __pa_symbol(bm_pud), PUD_TYPE_TABLE);
+                        //위 __pgd_populate를 한 후에 아래와 같이 됨
+                        //pgd_page_paddr(pgd) == __pa_symbol(bm_pud)
 		pudp = fixmap_pud(addr);
 	}
+        // 위와 마찬가지로 fixmap에 대해 head.S 에서 세팅한 페이지 테이블이 커버 못할 경우에
+        // bm_pmd를 연결
 	if (pud_none(READ_ONCE(*pudp)))
 		__pud_populate(pudp, __pa_symbol(bm_pmd), PMD_TYPE_TABLE);
 	pmdp = fixmap_pmd(addr);
